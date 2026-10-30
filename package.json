@@ -1,0 +1,22 @@
+{
+  "name": "boldfit-d2c-checkout",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Minimal D2C checkout slice: catalog, cart, mocked payments, signed webhooks, order status.",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c yellow,cyan \"npm run dev -w server\" \"npm run dev -w web\"",
+    "test": "npm test -w server && npm test -w web",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w web",
+    "build": "npm run build -w web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

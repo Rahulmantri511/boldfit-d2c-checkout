@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://boldfit.example/schemas/retry-failed-payment.v1.json",
+  "title": "RetryFailedPaymentRequest",
+  "description": "An internal agent proposes re-sending a payment link for a failed or stuck order. Nothing happens until a human approves. The executor re-checks every precondition when it runs, not when the request is proposed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["requestId", "action", "orderId", "reason", "proposedBy", "proposedAt", "preconditions", "approval", "status"],
+  "properties": {
+    "requestId": {
+      "type": "string",
+      "pattern": "^rfp_[A-Za-z0-9]{8,}$",
+      "description": "Also used as the Idempotency-Key when the executor calls POST /orders/{orderId}/payment-intents, so approving twice can't create two intents."
+    },
+    "action": { "const": "retry_failed_payment" },
+    "orderId": { "type": "string", "pattern": "^ord_[A-Za-z0-9]+$" },
+    "reason": {
+      "type": "string",
+      "enum": ["card_declined", "bank_timeout", "customer_requested", "webhook_never_arrived", "other"]
+    },
+    "reasonDetail": { "type": "string", "maxLength": 500 },
+    "proposedBy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": { "enum": ["agent", "human"] },
+        "id": { "type": "string", "description": "e.g. 'support-agent@v3' or an employee id" }
+      }
+    },
+    "proposedAt": { "type": "string", "format": "date-time" },
+    "preconditions": {
+      "type": "object",
+      "description": "What the agent saw when it proposed this. The executor refuses to run if the live order no longer matches.",
+      "additionalProperties": false,
+      "required": ["expectedOrderStatus", "expectedAmount", "currency", "previousAttempts"],
+      "properties": {
+        "expectedOrderStatus": { "enum": ["PAYMENT_FAILED", "PENDING_PAYMENT", "EXPIRED"] },
+        "expectedAmount": { "type": "integer", "minimum": 1, "description": "Paise. Must equal the order total at execution time." },
+        "currency": { "const": "INR" },
+        "previousAttempts": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "requiresRestock": {
+          "type": "boolean",
+          "description": "True if the order EXPIRED and its stock must be re-reserved first; that may fail."
+        }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "approvedBy", "approvedAt", "decision"],
+      "properties": {
+        "required": { "const": true },
+        "approvedBy": {
+          "type": ["string", "null"],
+          "description": "Employee id of the human approver. Must differ from proposedBy.id."
+        },
+        "approvedAt": { "type": ["string", "null"], "format": "date-time" },
+        "decision": { "enum": ["pending", "approved", "rejected"] },
+        "note": { "type": "string", "maxLength": 500 }
+      }
+    },
+    "expiresAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Approvals go stale. After this, a new request is needed."
+    },
+    "status": { "enum": ["pending_approval", "approved", "executing", "succeeded", "rejected", "expired", "failed_precondition"] },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "paymentIntentId": { "type": "string" },
+        "error": { "type": "string" }
+      }
+    }
+  },
+  "examples": [
+    {
+      "requestId": "rfp_7Kq2mX9a",
+      "action": "retry_failed_payment",
+      "orderId": "ord_543e6618eda64d59ad51",
+      "reason": "card_declined",
+      "reasonDetail": "Customer messaged support saying they've switched cards.",
+      "proposedBy": { "kind": "agent", "id": "support-agent@v3" },
+      "proposedAt": "2026-10-29T14:20:00Z",
+      "preconditions": {
+        "expectedOrderStatus": "PAYMENT_FAILED",
+        "expectedAmount": 379700,
+        "currency": "INR",
+        "previousAttempts": 1,
+        "requiresRestock": false
+      },
+      "approval": {
+        "required": true,
+        "approvedBy": "emp_priya_ops",
+        "approvedAt": "2026-10-29T14:24:10Z",
+        "decision": "approved"
+      },
+      "expiresAt": "2026-10-29T15:20:00Z",
+      "status": "approved"
+    }
+  ]
+}
